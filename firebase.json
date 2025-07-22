@@ -1,0 +1,14 @@
+{
+    "projectId": "didyouknow-7c044",
+    "firestore": {
+      "rules": "firestore.rules",
+      "indexes": "firestore.indexes.json"
+    },
+    "storage": {
+      "rules": "storage.rules"
+    },
+    "database": {
+      "rules": "database.rules.json"
+    }
+  }
+  
