@@ -13,6 +13,7 @@ export const useTheme = () => {
     textMuted: settings.isDarkMode ? '#999999' : '#999999',
     border: settings.isDarkMode ? '#404040' : '#e0e0e0',
     shadow: settings.isDarkMode ? '#000000' : '#000000',
+    error: '#ff4444',
   };
 
   return {

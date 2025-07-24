@@ -1,15 +1,110 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { signOut } from "firebase/auth";
-import React from "react";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { auth } from "../../firebase";
+import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import Purchases, { PurchasesOffering } from 'react-native-purchases';
+import { auth, db } from "../../firebase";
 import { useTheme } from "../../hooks/useTheme";
 
 export default function Settings() {
   const { t } = useTranslation();
   const { colors } = useTheme();
+  const [isPremium, setIsPremium] = useState(false);
+  const [offering, setOffering] = useState<PurchasesOffering | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    // Initialiser RevenueCat
+    const apiKey = Platform.OS === 'ios' 
+      ? process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_IOS
+      : process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID;
+
+    if (!apiKey) {
+      console.error('RevenueCat API key not found');
+      return;
+    }
+
+    Purchases.configure({
+      apiKey: apiKey, // À remplacer par vos vraies clés
+    });
+
+    // Vérifier le statut premium
+    checkPremiumStatus();
+    // Charger les offres
+    loadOfferings();
+  }, []);
+
+  const checkPremiumStatus = async () => {
+    try {
+      // Vérifier le statut Firestore si l'utilisateur est connecté
+      if (auth.currentUser) {
+        const userRef = doc(db, "users", auth.currentUser.uid);
+        const userDoc = await getDoc(userRef);
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          const isUserPremium = userData.abonnement?.premium === "active";
+          setIsPremium(isUserPremium);
+        } else {
+          setIsPremium(false);
+        }
+      } else {
+        setIsPremium(false);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la vérification du statut premium:', error);
+      setIsPremium(false);
+    }
+  };
+
+  const loadOfferings = async () => {
+    try {
+      const offerings = await Purchases.getOfferings();
+      if (offerings.current) {
+        setOffering(offerings.current);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des offres:', error);
+    }
+  };
+
+  const handlePurchasePremium = async () => {
+    if (!offering?.availablePackages[0]) {
+      Alert.alert(t("error"), t("premium_not_available"));
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { customerInfo } = await Purchases.purchasePackage(offering.availablePackages[0]);
+      
+      if (customerInfo.entitlements.active['premium']) {
+        setIsPremium(true);
+        
+        // Mettre à jour le document utilisateur avec l'objet abonnement
+        if (auth.currentUser) {
+          const userRef = doc(db, "users", auth.currentUser.uid);
+          await updateDoc(userRef, {
+            abonnement: {
+              premium: "active",
+              dateActivation: new Date().toISOString(),
+              type: "lifetime"
+            }
+          });
+        }
+        
+        Alert.alert(t("success"), t("premium_purchase_success"));
+      }
+    } catch (error: any) {
+      if (!error.userCancelled) {
+        Alert.alert(t("error"), t("premium_purchase_error"));
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -30,6 +125,37 @@ export default function Settings() {
       
       {/* Boutons de paramètres */}
       <View style={styles.settingsList}>
+        <TouchableOpacity 
+          style={[styles.settingButton, { backgroundColor: colors.surface }]} 
+          onPress={() => router.push("/(tabs)/propose-anecdote")}
+        >
+          <Ionicons name="add-circle" size={24} color={colors.primary} />
+          <Text style={[styles.settingText, { color: colors.text }]}>{t("propose_anecdote")}</Text>
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+        </TouchableOpacity>
+
+        {/* Bouton Premium */}
+        {!isPremium ? (
+          <TouchableOpacity 
+            style={[styles.premiumButton, { backgroundColor: colors.primary }]} 
+            onPress={handlePurchasePremium}
+            disabled={isLoading}
+          >
+            <Ionicons name="diamond" size={24} color="#fff" />
+            <Text style={styles.premiumButtonText}>
+              {isLoading ? t("processing") : t("upgrade_to_premium")}
+            </Text>
+            <Text style={styles.premiumPriceText}>€9.99</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={[styles.premiumActiveButton, { backgroundColor: colors.primary + '20' }]}>
+            <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+            <Text style={[styles.premiumActiveText, { color: colors.primary }]}>
+              {t("premium_active")}
+            </Text>
+          </View>
+        )}
+
         <TouchableOpacity 
           style={[styles.settingButton, { backgroundColor: colors.surface }]} 
           onPress={() => router.push("/(tabs)/privacy")}
@@ -145,5 +271,50 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
     fontSize: 16,
+  },
+  premiumButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    marginBottom: 12,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  premiumButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 16,
+    marginLeft: 10,
+  },
+  premiumPriceText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 16,
+    marginLeft: 10,
+  },
+  premiumActiveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    marginBottom: 12,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  premiumActiveText: {
+    fontWeight: "bold",
+    fontSize: 16,
+    marginLeft: 10,
   },
 }); 

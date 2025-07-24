@@ -24,6 +24,15 @@ service cloud.firestore {
         request.resource.data.userEmail == request.auth.token.email;
       allow update, delete: if false;
     }
+
+    // Règle pour la collection delete-data-requests
+    match /delete-data-requests/{requestId} {
+      allow read: if false; // Seuls les admins peuvent lire
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.userEmail == request.auth.token.email;
+      allow update, delete: if false;
+    }
     
     // (optionnel) Règle générique pour le reste
     match /{document=**} {

@@ -2,11 +2,12 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from 'expo-haptics';
 import { router } from "expo-router";
 import { getAuth } from "firebase/auth";
-import { arrayUnion, collection, doc, DocumentData, getDocs, increment, limit, query, QueryDocumentSnapshot, startAfter, updateDoc } from "firebase/firestore";
+import { arrayUnion, collection, doc, DocumentData, getDoc, getDocs, increment, limit, query, QueryDocumentSnapshot, startAfter, updateDoc } from "firebase/firestore";
 import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Dimensions, Modal, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import Animated, {
   Extrapolation,
   interpolate,
@@ -26,6 +27,9 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
 const EMOJIS = ["🎉", "😂", "🤩", "😲", "🔥", "😎", "🦄", "🥳", "🤓", "💡", "✨", "🎈", "🍀", "🚀", "🌈"];
+
+// Configuration des publicités
+const AD_UNIT_ID = __DEV__ ? 'ca-app-pub-3940256099942544/6300978111' : 'ca-app-pub-3940256099942544/6300978111'; // ID de test pour le moment
 
 function getRandomEmoji() {
   return EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
@@ -77,12 +81,18 @@ export default function Home() {
   const [endReached, setEndReached] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
   const auth = getAuth();
 
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
+  
+  // Animation pour la carte suivante
+  const nextCardTranslateX = useSharedValue(0);
+  const nextCardScale = useSharedValue(0.9);
+  const nextCardOpacity = useSharedValue(0.5);
   
   // Animations pour la modal de réponse
   const modalScale = useSharedValue(0);
@@ -169,12 +179,51 @@ export default function Home() {
     setCurrentIndex(0);
     setShowAnswer(false);
     fetchAnecdotes();
+    
+    // Réinitialiser les animations de la carte suivante
+    nextCardTranslateX.value = 0;
+    nextCardScale.value = 0.9;
+    nextCardOpacity.value = 0.5;
   }, [selectedCategory]);
+
+  // S'assurer que l'index est valide quand les anecdotes changent
+  useEffect(() => {
+    if (anecdotes.length > 0 && currentIndex >= anecdotes.length) {
+      setCurrentIndex(0);
+    }
+  }, [anecdotes, currentIndex]);
 
   // Charger les catégories au montage
   useEffect(() => {
     fetchCategories();
   }, [fetchCategories]);
+
+  // Vérifier le statut premium
+  useEffect(() => {
+    const checkPremiumStatus = async () => {
+      try {
+        // Vérifier le statut Firestore si l'utilisateur est connecté
+        if (auth.currentUser) {
+          const userRef = doc(db, "users", auth.currentUser.uid);
+          const userDoc = await getDoc(userRef);
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const isUserPremium = userData.abonnement?.premium === "active";
+            setIsPremium(isUserPremium);
+          } else {
+            setIsPremium(false);
+          }
+        } else {
+          setIsPremium(false);
+        }
+      } catch (error) {
+        console.error('Erreur lors de la vérification du statut premium:', error);
+        setIsPremium(false);
+      }
+    };
+    
+    checkPremiumStatus();
+  }, []);
 
   const updateUserLikes = async (anecdoteId: string, type: 'like' | 'dislike') => {
     if (!auth.currentUser) return;
@@ -234,11 +283,38 @@ export default function Home() {
       }
     }
     
-    // Passer à l'anecdote suivante
-    if (currentIndex < anecdotes.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-      setShowAnswer(false);
-    }
+    // Animation de sortie de la carte actuelle
+    translateX.value = withTiming(direction === 'right' ? SCREEN_WIDTH : -SCREEN_WIDTH, { duration: 300 });
+    opacity.value = withTiming(0, { duration: 300 });
+    
+    // Animation d'entrée de la carte suivante
+    const nextDirection = direction === 'right' ? -SCREEN_WIDTH : SCREEN_WIDTH;
+    nextCardTranslateX.value = nextDirection;
+    nextCardScale.value = 0.9;
+    nextCardOpacity.value = 0.5;
+    
+    setTimeout(() => {
+      // Passer à l'anecdote suivante
+      if (currentIndex < anecdotes.length - 1) {
+        setCurrentIndex(currentIndex + 1);
+        setShowAnswer(false);
+      } else {
+        // Si c'est la dernière anecdote, remettre à zéro
+        setCurrentIndex(0);
+        setShowAnswer(false);
+      }
+      
+      // Animation d'entrée de la nouvelle carte
+      nextCardTranslateX.value = withSpring(0, { damping: 15, stiffness: 150 });
+      nextCardScale.value = withSpring(1, { damping: 15, stiffness: 150 });
+      nextCardOpacity.value = withSpring(1, { damping: 15, stiffness: 150 });
+      
+      // Réinitialiser les animations de la carte actuelle
+      translateX.value = 0;
+      translateY.value = 0;
+      scale.value = 1;
+      opacity.value = 1;
+    }, 300);
   };
 
   const panGesture = Gesture.Pan()
@@ -276,6 +352,16 @@ export default function Home() {
         { scale: scale.value },
       ],
       opacity: opacity.value,
+    };
+  });
+
+  const nextCardAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { translateX: nextCardTranslateX.value },
+        { scale: nextCardScale.value },
+      ],
+      opacity: nextCardOpacity.value,
     };
   });
 
@@ -510,56 +596,127 @@ export default function Home() {
           </Modal>
 
           <View style={styles.cardContainer}>
-            <GestureDetector gesture={panGesture}>
-              <Animated.View style={[styles.card, { backgroundColor: colors.surface, shadowColor: colors.primary }, animatedStyle]}>
-                <View style={styles.cardContent}>
-                  <Text style={styles.emoji}>{getRandomEmoji()}</Text>
-                  
-                  {/* Badge de catégorie */}
-                  {currentAnecdote?.category_label && (
-                    <View style={[styles.categoryBadge, { backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center' }]}> 
-                      {(() => {
-                        const cat = categories.find(cat => cat.id === currentAnecdote.category_id);
-                        if (cat?.icon) {
-                          return <Ionicons name={cat.icon as any} size={16} color="#fff" style={{ marginRight: 6 }} />;
-                        }
-                        return null;
-                      })()}
-                      <Text style={[styles.categoryBadgeText, { color: '#fff' }]}> 
-                        {currentAnecdote.category_label || categories.find(cat => cat.id === currentAnecdote.category_id)?.label || currentAnecdote.category_id}
+            {anecdotes.length > 0 && currentAnecdote ? (
+              <>
+                {/* Carte suivante en arrière-plan */}
+                {anecdotes.length > 1 && (
+                  <Animated.View style={[styles.card, styles.nextCard, { backgroundColor: colors.surface, shadowColor: colors.primary }, nextCardAnimatedStyle]}>
+                    <View style={styles.cardContent}>
+                      {/* <Text style={styles.emoji}>{getRandomEmoji()}</Text> */}
+                      
+                      {/* Badge de catégorie pour la carte suivante */}
+                      {/* {(() => {
+                        const nextIndex = currentIndex < anecdotes.length - 1 ? currentIndex + 1 : 0;
+                        const nextAnecdote = anecdotes[nextIndex];
+                        return nextAnecdote?.category_label && (
+                          <View style={[styles.categoryBadge, { backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center' }]}> 
+                            {(() => {
+                              const cat = categories.find(cat => cat.id === nextAnecdote.category_id);
+                              if (cat?.icon) {
+                                return <Ionicons name={cat.icon as any} size={16} color="#fff" style={{ marginRight: 6 }} />;
+                              }
+                              return null;
+                            })()}
+                            <Text style={[styles.categoryBadgeText, { color: '#fff' }]}> 
+                              {nextAnecdote.category_label || categories.find(cat => cat.id === nextAnecdote.category_id)?.label || nextAnecdote.category_id}
+                            </Text>
+                          </View>
+                        );
+                      })()} */}
+                      
+                      <Text style={[styles.question, { color: colors.text }]} numberOfLines={0}>
+                        {(() => {
+                          const nextIndex = currentIndex < anecdotes.length - 1 ? currentIndex + 1 : 0;
+                          return anecdotes[nextIndex]?.question;
+                        })()}
                       </Text>
                     </View>
-                  )}
-                  
-                  <Text style={[styles.question, { color: colors.text }]} numberOfLines={0}>
-                    {currentAnecdote?.question}
-                  </Text>
-                  
+                  </Animated.View>
+                )}
+                
+                {/* Carte actuelle */}
+                <GestureDetector gesture={panGesture}>
+                  <Animated.View style={[styles.card, { backgroundColor: colors.surface, shadowColor: colors.primary }, animatedStyle]}>
+                    <View style={styles.cardContent}>
+                      {/* <Text style={styles.emoji}>{getRandomEmoji()}</Text> */}
+                      
+                      {/* Badge de catégorie */}
+                      {/* {currentAnecdote?.category_label && (
+                        <View style={[styles.categoryBadge, { backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center' }]}> 
+                          {(() => {
+                            const cat = categories.find(cat => cat.id === currentAnecdote.category_id);
+                            if (cat?.icon) {
+                              return <Ionicons name={cat.icon as any} size={16} color="#fff" style={{ marginRight: 6 }} />;
+                            }
+                            return null;
+                          })()}
+                          <Text style={[styles.categoryBadgeText, { color: '#fff' }]}> 
+                            {currentAnecdote.category_label || categories.find(cat => cat.id === currentAnecdote.category_id)?.label || currentAnecdote.category_id}
+                          </Text>
+                        </View>
+                      )} */}
+                      
+                      <Text style={[styles.question, { color: colors.text }]} numberOfLines={0}>
+                        {currentAnecdote?.question}
+                      </Text>
+                      
+                      <TouchableOpacity 
+                        style={[styles.showAnswerButton, { backgroundColor: colors.primary, shadowColor: colors.primary }]} 
+                        onPress={openAnswerModal}
+                      >
+                        <Text style={styles.showAnswerText}>{t("show_answer")}</Text>
+                        <Ionicons name="chevron-down" size={20} color="#fff" />
+                      </TouchableOpacity>
+                      
+                      {/* Affichage des likes/dislikes */}
+                      <View style={styles.likesRow}>
+                        <Ionicons name="thumbs-up" size={22} color="#4CAF50" style={{ marginRight: 4 }} />
+                        <Text style={styles.likesCount}>{currentAnecdote?.likes || 0}</Text>
+                        <Ionicons name="thumbs-down" size={22} color="#F44336" style={{ marginLeft: 16, marginRight: 4 }} />
+                        <Text style={styles.dislikesCount}>{currentAnecdote?.dislikes || 0}</Text>
+                      </View>
+                    </View>
+                  </Animated.View>
+                </GestureDetector>
+                <Animated.View style={[styles.likeLabel, likeOpacity]}>
+                  <Text style={styles.likeText}>{t("like")}</Text>
+                </Animated.View>
+                <Animated.View style={[styles.dislikeLabel, dislikeOpacity]}>
+                  <Text style={styles.dislikeText}>{t("dislike")}</Text>
+                </Animated.View>
+              </>
+            ) : (
+              <View style={{ justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={[styles.noMoreText, { color: colors.primary }]}>
+                  {selectedCategory === 'all' 
+                    ? t("no_more_anecdotes")
+                    : t("no_anecdotes_category")
+                  }
+                </Text>
+                {selectedCategory !== 'all' && (
                   <TouchableOpacity 
-                    style={[styles.showAnswerButton, { backgroundColor: colors.primary, shadowColor: colors.primary }]} 
-                    onPress={openAnswerModal}
+                    style={styles.backToAllButton}
+                    onPress={() => setSelectedCategory('all')}
                   >
-                    <Text style={styles.showAnswerText}>{t("show_answer")}</Text>
-                    <Ionicons name="chevron-down" size={20} color="#fff" />
+                    <Text style={styles.backToAllText}>{t("see_all_categories")}</Text>
                   </TouchableOpacity>
-                  
-                  {/* Affichage des likes/dislikes */}
-                  <View style={styles.likesRow}>
-                    <Ionicons name="thumbs-up" size={22} color="#4CAF50" style={{ marginRight: 4 }} />
-                    <Text style={styles.likesCount}>{currentAnecdote?.likes || 0}</Text>
-                    <Ionicons name="thumbs-down" size={22} color="#F44336" style={{ marginLeft: 16, marginRight: 4 }} />
-                    <Text style={styles.dislikesCount}>{currentAnecdote?.dislikes || 0}</Text>
-                  </View>
-                </View>
-              </Animated.View>
-            </GestureDetector>
-            <Animated.View style={[styles.likeLabel, likeOpacity]}>
-              <Text style={styles.likeText}>{t("like")}</Text>
-            </Animated.View>
-            <Animated.View style={[styles.dislikeLabel, dislikeOpacity]}>
-              <Text style={styles.dislikeText}>{t("dislike")}</Text>
-            </Animated.View>
+                )}
+              </View>
+            )}
           </View>
+
+          {/* Bannière publicitaire en bas de page */}
+          {!isPremium && (
+            <View style={styles.bottomAdContainer}>
+              <BannerAd
+                unitId={AD_UNIT_ID}
+                size={BannerAdSize.BANNER}
+                requestOptions={{
+                  requestNonPersonalizedAdsOnly: true,
+                }}
+              />
+            </View>
+          )}
         </SafeAreaView>
       </View>
     </GestureHandlerRootView>
@@ -594,18 +751,23 @@ const styles = StyleSheet.create({
   },
   card: {
     width: SCREEN_WIDTH - 40,
-    height: SCREEN_HEIGHT * 0.6,
+    height: SCREEN_HEIGHT * 0.5, // Réduit de 0.6 à 0.5
     borderRadius: 20,
-    padding: 30,
+    padding: 10,
     shadowOpacity: 0.2,
     shadowRadius: 15,
     elevation: 8,
     zIndex: 1,
   },
+  nextCard: {
+    position: 'absolute',
+    zIndex: 0,
+  },
   cardContent: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between', // Change de 'center' à 'space-between'
+    paddingVertical: 20, // Ajoute un padding vertical
   },
   closeButton: {
     position: 'absolute',
@@ -618,7 +780,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: 15, // Réduit de 20 à 15
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
@@ -638,7 +800,7 @@ const styles = StyleSheet.create({
   question: {
     fontWeight: 'bold',
     fontSize: 20,
-    marginBottom: 20,
+    marginBottom: 15, // Réduit de 20 à 15
     textAlign: 'center',
     lineHeight: 28,
     flexShrink: 1,
@@ -783,7 +945,7 @@ const styles = StyleSheet.create({
   likesRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 15, // Réduit de 20 à 15
   },
   likesCount: {
     fontSize: 16,
@@ -868,5 +1030,9 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  bottomAdContainer: {
+    width: SCREEN_WIDTH,
+    alignItems: 'center',
   },
 }); 
