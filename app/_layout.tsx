@@ -1,34 +1,32 @@
-import { Ionicons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
-import { useTranslation } from "react-i18next";
-import "../i18n";
+import { router, Slot, usePathname } from "expo-router";
+import { onAuthStateChanged } from "firebase/auth";
+import { useEffect, useState } from "react";
+import { I18nextProvider } from "react-i18next";
+import { SettingsProvider } from "../contexts/SettingsContext";
+import { auth } from "../firebase";
+import i18n from "../i18n";
 
 export default function RootLayout() {
-  const { t } = useTranslation();
+  const [authChecked, setAuthChecked] = useState(false);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user && !pathname.startsWith("/auth")) {
+        router.replace("/auth");
+      }
+      setAuthChecked(true);
+    });
+    return unsubscribe;
+  }, [pathname]);
+
+  if (!authChecked) return null;
+
   return (
-    <Tabs>
-      <Tabs.Screen
-        name="(tabs)/index"
-        options={{
-          title: t("home"),
-          headerTitle: t("home"),
-          tabBarLabel: t("home"),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="(tabs)/profile"
-        options={{
-          title: t("profile"),
-          headerTitle: t("profile"),
-          tabBarLabel: t("profile"),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" color={color} size={size} />
-          ),
-        }}
-      />
-    </Tabs>
+    <I18nextProvider i18n={i18n}>
+      <SettingsProvider>
+        <Slot />
+      </SettingsProvider>
+    </I18nextProvider>
   );
 } 

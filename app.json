@@ -4,19 +4,21 @@
     "slug": "DidYouKnow",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/logo.png",
     "scheme": "didyouknow",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anisse3000.didyouknow"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.anisse3000.didyouknow"
     },
     "web": {
       "bundler": "metro",
@@ -28,15 +30,28 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
+          "enableFullScreenImage_legacy": true,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "ios": {
+            "backgroundColor": "#ffffff",
+            "image": "./assets/images/splash_icon.png"
+          },
+          "android": {
+            "backgroundColor": "#ffffff",
+            "image": "./assets/images/logo.png",
+            "imageWidth": 195
+          }
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "84ef8bc3-3235-4953-9d55-da7277c1bdba"
+      }
     }
   }
 }

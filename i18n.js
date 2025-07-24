@@ -3,16 +3,32 @@ import { initReactI18next } from 'react-i18next';
 import en from './locales/en.json';
 import fr from './locales/fr.json';
 
+const resources = {
+  en: {
+    translation: {
+     ...en
+    },
+  },
+  fr: {
+    translation: {
+      ...fr
+    },
+  },
+};
+
 i18n
   .use(initReactI18next)
   .init({
-    compatibilityJSON: 'v3',
+    resources,
     lng: 'fr',
     fallbackLng: 'en',
-    resources: {
-      fr: { translation: fr },
-      en: { translation: en }
-    }
+    debug: false,
+    interpolation: {
+      escapeValue: false,
+    },
+    react: {
+      useSuspense: false,
+    },
   });
 
 export default i18n; 
