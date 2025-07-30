@@ -106,6 +106,37 @@ export default function Settings() {
     }
   };
 
+  const handleRestorePurchases = async () => {
+    setIsLoading(true);
+    try {
+      const customerInfo = await Purchases.restorePurchases();
+      
+      if (customerInfo.entitlements.active['premium']) {
+        setIsPremium(true);
+        
+        // Mettre à jour le document utilisateur avec l'objet abonnement
+        if (auth.currentUser) {
+          const userRef = doc(db, "users", auth.currentUser.uid);
+          await updateDoc(userRef, {
+            abonnement: {
+              premium: "active",
+              dateActivation: new Date().toISOString(),
+              type: "lifetime"
+            }
+          });
+        }
+        
+        Alert.alert(t("success"), t("purchases_restored_success"));
+      } else {
+        Alert.alert(t("info"), t("no_purchases_to_restore"));
+      }
+    } catch (error) {
+      Alert.alert(t("error"), t("restore_purchases_error"));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleLogout = async () => {
     await signOut(auth);
     router.replace("/auth");
@@ -189,6 +220,16 @@ export default function Settings() {
         >
           <Ionicons name="color-palette" size={24} color={colors.primary} />
           <Text style={[styles.settingText, { color: colors.text }]}>{t("appearance")}</Text>
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.settingButton, { backgroundColor: colors.surface }]} 
+          onPress={handleRestorePurchases}
+          disabled={isLoading}
+        >
+          <Ionicons name="refresh" size={24} color={colors.primary} />
+          <Text style={[styles.settingText, { color: colors.text }]}>{t("restore_purchases")}</Text>
           <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
         </TouchableOpacity>
       </View>

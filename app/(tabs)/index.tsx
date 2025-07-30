@@ -5,7 +5,7 @@ import { getAuth } from "firebase/auth";
 import { arrayUnion, collection, doc, DocumentData, getDoc, getDocs, increment, limit, query, QueryDocumentSnapshot, startAfter, updateDoc } from "firebase/firestore";
 import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Dimensions, Modal, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Modal, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import Animated, {
@@ -19,13 +19,11 @@ import Animated, {
   withTiming
 } from "react-native-reanimated";
 import { db } from "../../firebase";
+import { useDevice } from "../../hooks/useDevice";
 import { useTheme } from "../../hooks/useTheme";
 import i18n from "../../i18n";
 
 const PAGE_SIZE = 50;
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const SCREEN_HEIGHT = Dimensions.get('window').height;
-const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
 const EMOJIS = ["🎉", "😂", "🤩", "😲", "🔥", "😎", "🦄", "🥳", "🤓", "💡", "✨", "🎈", "🍀", "🚀", "🌈"];
 
 // Configuration des publicités
@@ -62,6 +60,9 @@ type Category = {
 export default function Home() {
   const { t } = useTranslation();
   const { colors } = useTheme();
+  const { isTablet, width: SCREEN_WIDTH, height: SCREEN_HEIGHT, fontSize, spacing, iconSize } = useDevice();
+  
+  const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
   
   // Forcer la langue française si elle n'est pas définie
   useEffect(() => {
@@ -98,6 +99,329 @@ export default function Home() {
   const modalScale = useSharedValue(0);
   const modalOpacity = useSharedValue(0);
   const modalTranslateY = useSharedValue(50);
+
+  // Créer les styles dynamiquement
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      zIndex: 1,
+    },
+    banner: {
+      marginTop: isTablet ? 80 : 60,
+      alignItems: 'center',
+      marginBottom: isTablet ? 12 : 8,
+    },
+    bannerText: {
+      fontSize: isTablet ? 36 : 28,
+      fontWeight: 'bold',
+      fontFamily: 'System',
+      letterSpacing: 1,
+      textShadowColor: 'rgba(255, 255, 255, 0.5)',
+      textShadowOffset: { width: 1, height: 1 },
+      textShadowRadius: 2,
+    },
+    cardContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: isTablet ? 30 : 20,
+      zIndex: 1,
+    },
+    card: {
+      width: isTablet ? SCREEN_WIDTH * 0.8 : SCREEN_WIDTH - 40,
+      height: isTablet ? SCREEN_HEIGHT * 0.6 : SCREEN_HEIGHT * 0.5,
+      borderRadius: isTablet ? 25 : 20,
+      padding: isTablet ? 15 : 10,
+      shadowOpacity: 0.2,
+      shadowRadius: 15,
+      elevation: 8,
+      zIndex: 1,
+    },
+    nextCard: {
+      position: 'absolute',
+      zIndex: 0,
+    },
+    cardContent: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: isTablet ? 25 : 20,
+    },
+    closeButton: {
+      position: 'absolute',
+      top: -10,
+      right: -10,
+    },
+    showAnswerButton: {
+      borderRadius: isTablet ? 30 : 25,
+      paddingVertical: isTablet ? 16 : 12,
+      paddingHorizontal: isTablet ? 30 : 24,
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginVertical: isTablet ? 20 : 15,
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    showAnswerText: {
+      color: '#fff',
+      fontWeight: 'bold',
+      fontSize: isTablet ? 20 : 16,
+      marginRight: 8,
+      textAlign: 'center',
+      justifyContent: 'center',
+    },
+    emoji: {
+      fontSize: isTablet ? 64 : 48,
+      marginBottom: isTablet ? 25 : 20,
+    },
+    question: {
+      fontWeight: 'bold',
+      fontSize: isTablet ? 26 : 20,
+      marginBottom: isTablet ? 20 : 15,
+      textAlign: 'center',
+      lineHeight: isTablet ? 36 : 28,
+      flexShrink: 1,
+      flexWrap: 'wrap',
+      paddingHorizontal: isTablet ? 15 : 10,
+    },
+    answerBubble: {
+      backgroundColor: '#B5FFFC',
+      borderRadius: 16,
+      padding: 20,
+      alignSelf: 'stretch',
+      flexShrink: 1,
+      height: 'auto',
+      marginVertical: 10,
+      flex: 1,
+    },
+    answer: {
+      fontSize: 16,
+      color: '#333',
+      textAlign: 'center',
+      lineHeight: 24,
+      flexShrink: 1,
+    },
+    likeLabel: {
+      position: 'absolute',
+      top: '35%',
+      right: 40,
+      transform: [{ rotate: '15deg' }],
+      zIndex: 1,
+    },
+    likeText: {
+      fontSize: isTablet ? 42 : 32,
+      fontWeight: 'bold',
+      color: '#4CAF50',
+      textShadowColor: '#fff',
+      textShadowOffset: { width: 2, height: 2 },
+      textShadowRadius: 4,
+    },
+    dislikeLabel: {
+      position: 'absolute',
+      top: '35%',
+      left: 40,
+      transform: [{ rotate: '-15deg' }],
+      zIndex: 1,
+    },
+    dislikeText: {
+      fontSize: isTablet ? 42 : 32,
+      fontWeight: 'bold',
+      color: '#F44336',
+      textShadowColor: '#fff',
+      textShadowOffset: { width: 2, height: 2 },
+      textShadowRadius: 4,
+    },
+    noMoreText: {
+      fontSize: isTablet ? 26 : 20,
+      textAlign: 'center',
+      marginBottom: 20,
+    },
+    settingsButtonContainer: {
+      position: 'absolute',
+      top: isTablet ? 60 : 50,
+      right: isTablet ? 30 : 24,
+      zIndex: 10,
+      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+      borderRadius: 20,
+      padding: 8,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    categorySelector: {
+      paddingHorizontal: isTablet ? 30 : 20,
+      paddingVertical: isTablet ? 20 : 15,
+    },
+    categoryButton: {
+      backgroundColor: '#fff',
+      borderRadius: isTablet ? 30 : 25,
+      paddingVertical: isTablet ? 16 : 12,
+      paddingHorizontal: isTablet ? 25 : 20,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    categoryButtonText: {
+      fontSize: isTablet ? 20 : 16,
+      fontWeight: '600',
+      color: '#333',
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: isTablet ? 40 : 20,
+    },
+    modalContent: {
+      backgroundColor: '#fff',
+      borderRadius: isTablet ? 25 : 20,
+      padding: isTablet ? 30 : 24,
+      width: '100%',
+      maxWidth: isTablet ? 500 : 400,
+      maxHeight: '80%',
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: isTablet ? 25 : 20,
+    },
+    modalTitle: {
+      fontSize: isTablet ? 24 : 20,
+      fontWeight: 'bold',
+      color: '#333',
+    },
+    categoryOption: {
+      paddingVertical: isTablet ? 18 : 15,
+      paddingHorizontal: isTablet ? 20 : 16,
+      borderBottomWidth: 1,
+      borderBottomColor: '#f0f0f0',
+    },
+    categoryOptionText: {
+      fontSize: isTablet ? 18 : 16,
+      color: '#333',
+    },
+    categoryBadge: {
+      position: 'absolute',
+      top: isTablet ? 20 : 15,
+      right: isTablet ? 20 : 15,
+      paddingHorizontal: isTablet ? 12 : 8,
+      paddingVertical: isTablet ? 6 : 4,
+      borderRadius: isTablet ? 15 : 12,
+    },
+    categoryBadgeText: {
+      fontSize: isTablet ? 14 : 12,
+      fontWeight: '600',
+      color: '#FF6B81',
+    },
+    likesRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: isTablet ? 20 : 15,
+    },
+    likesCount: {
+      fontSize: isTablet ? 20 : 16,
+      fontWeight: '600',
+      color: '#4CAF50',
+    },
+    dislikesCount: {
+      fontSize: isTablet ? 20 : 16,
+      fontWeight: '600',
+      color: '#F44336',
+    },
+    backToAllButton: {
+      backgroundColor: '#FF6B81',
+      paddingHorizontal: isTablet ? 25 : 20,
+      paddingVertical: isTablet ? 12 : 10,
+      borderRadius: isTablet ? 25 : 20,
+      marginTop: isTablet ? 15 : 10,
+    },
+    backToAllText: {
+      color: '#fff',
+      fontWeight: '600',
+      fontSize: isTablet ? 16 : 14,
+    },
+    answerModalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: isTablet ? 30 : 20,
+    },
+    answerModalContent: {
+      width: '100%',
+      maxWidth: isTablet ? 500 : 400,
+      borderRadius: isTablet ? 25 : 20,
+      padding: isTablet ? 30 : 24,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 12,
+      elevation: 8,
+    },
+    answerModalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: isTablet ? 25 : 20,
+    },
+    answerModalTitleContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    answerModalTitle: {
+      fontSize: isTablet ? 24 : 20,
+      fontWeight: 'bold',
+    },
+    answerModalBody: {
+      marginBottom: isTablet ? 30 : 24,
+      alignItems: 'center',
+    },
+    answerModalIconContainer: {
+      width: isTablet ? 80 : 60,
+      height: isTablet ? 80 : 60,
+      borderRadius: isTablet ? 40 : 30,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: isTablet ? 20 : 16,
+    },
+    answerModalText: {
+      fontSize: isTablet ? 18 : 16,
+      lineHeight: isTablet ? 28 : 24,
+      textAlign: 'center',
+    },
+    answerModalButton: {
+      borderRadius: isTablet ? 15 : 12,
+      paddingVertical: isTablet ? 18 : 14,
+      paddingHorizontal: isTablet ? 30 : 24,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+    },
+    answerModalButtonText: {
+      color: '#fff',
+      fontSize: isTablet ? 18 : 16,
+      fontWeight: 'bold',
+    },
+    bottomAdContainer: {
+      width: SCREEN_WIDTH,
+      alignItems: 'center',
+    },
+    adText: {
+      fontSize: isTablet ? 14 : 12,
+      marginTop: 5,
+      fontStyle: 'italic',
+    },
+  });
 
   const fetchCategories = useCallback(async () => {
     try {
@@ -198,11 +522,10 @@ export default function Home() {
     fetchCategories();
   }, [fetchCategories]);
 
-  // Vérifier le statut premium
+  // Vérifier le statut premium depuis Firestore
   useEffect(() => {
     const checkPremiumStatus = async () => {
       try {
-        // Vérifier le statut Firestore si l'utilisateur est connecté
         if (auth.currentUser) {
           const userRef = doc(db, "users", auth.currentUser.uid);
           const userDoc = await getDoc(userRef);
@@ -221,7 +544,6 @@ export default function Home() {
         setIsPremium(false);
       }
     };
-    
     checkPremiumStatus();
   }, []);
 
@@ -710,7 +1032,7 @@ export default function Home() {
             <View style={styles.bottomAdContainer}>
               <BannerAd
                 unitId={AD_UNIT_ID}
-                size={BannerAdSize.BANNER}
+                size={isTablet ? BannerAdSize.ANCHORED_ADAPTIVE_BANNER : BannerAdSize.BANNER}
                 requestOptions={{
                   requestNonPersonalizedAdsOnly: true,
                 }}
@@ -722,317 +1044,3 @@ export default function Home() {
     </GestureHandlerRootView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    zIndex: 1,
-  },
-  banner: {
-    marginTop: 60,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  bannerText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    fontFamily: 'System',
-    letterSpacing: 1,
-    textShadowColor: 'rgba(255, 255, 255, 0.5)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-  },
-  cardContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    zIndex: 1,
-  },
-  card: {
-    width: SCREEN_WIDTH - 40,
-    height: SCREEN_HEIGHT * 0.5, // Réduit de 0.6 à 0.5
-    borderRadius: 20,
-    padding: 10,
-    shadowOpacity: 0.2,
-    shadowRadius: 15,
-    elevation: 8,
-    zIndex: 1,
-  },
-  nextCard: {
-    position: 'absolute',
-    zIndex: 0,
-  },
-  cardContent: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'space-between', // Change de 'center' à 'space-between'
-    paddingVertical: 20, // Ajoute un padding vertical
-  },
-  closeButton: {
-    position: 'absolute',
-    top: -10,
-    right: -10,
-  },
-  showAnswerButton: {
-    borderRadius: 25,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 15, // Réduit de 20 à 15
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  showAnswerText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
-    marginRight: 8,
-    textAlign: 'center',
-    justifyContent: 'center',
-  },
-  emoji: {
-    fontSize: 48,
-    marginBottom: 20,
-  },
-  question: {
-    fontWeight: 'bold',
-    fontSize: 20,
-    marginBottom: 15, // Réduit de 20 à 15
-    textAlign: 'center',
-    lineHeight: 28,
-    flexShrink: 1,
-    flexWrap: 'wrap',
-    paddingHorizontal: 10,
-  },
-  answerBubble: {
-    backgroundColor: '#B5FFFC',
-    borderRadius: 16,
-    padding: 20,
-    alignSelf: 'stretch',
-    flexShrink: 1,
-    height: 'auto',
-    marginVertical: 10,
-    flex: 1,
-  },
-  answer: {
-    fontSize: 16,
-    color: '#333',
-    textAlign: 'center',
-    lineHeight: 24,
-    flexShrink: 1,
-  },
-  likeLabel: {
-    position: 'absolute',
-    top: '35%',
-    right: 40,
-    transform: [{ rotate: '15deg' }],
-    zIndex: 1,
-  },
-  likeText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#4CAF50',
-    textShadowColor: '#fff',
-    textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 4,
-  },
-  dislikeLabel: {
-    position: 'absolute',
-    top: '35%',
-    left: 40,
-    transform: [{ rotate: '-15deg' }],
-    zIndex: 1,
-  },
-  dislikeText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#F44336',
-    textShadowColor: '#fff',
-    textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 4,
-  },
-  noMoreText: {
-    fontSize: 20,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  settingsButtonContainer: {
-    position: 'absolute',
-    top: 50,
-    right: 24,
-    zIndex: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 20,
-    padding: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  categorySelector: {
-    marginHorizontal: 20,
-    marginTop: 20,
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  categoryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  categoryButtonText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    width: '80%',
-    maxHeight: '70%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  categoryOption: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  categoryOptionText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  categoryBadge: {
-    backgroundColor: '#FFE4E6',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginBottom: 16,
-  },
-  categoryBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FF6B81',
-  },
-  likesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 15, // Réduit de 20 à 15
-  },
-  likesCount: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#4CAF50',
-  },
-  dislikesCount: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#F44336',
-  },
-  backToAllButton: {
-    backgroundColor: '#FF6B81',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginTop: 10,
-  },
-  backToAllText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  answerModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  answerModalContent: {
-    width: '100%',
-    maxWidth: 400,
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  answerModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  answerModalTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  answerModalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  answerModalBody: {
-    marginBottom: 24,
-    alignItems: 'center',
-  },
-  answerModalIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  answerModalText: {
-    fontSize: 16,
-    lineHeight: 24,
-    textAlign: 'center',
-  },
-  answerModalButton: {
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  answerModalButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  bottomAdContainer: {
-    width: SCREEN_WIDTH,
-    alignItems: 'center',
-  },
-}); 
