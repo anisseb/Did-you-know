@@ -51,6 +51,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         androidAppId: process.env.EXPO_PUBLIC_ADS_ANDROID_FR || "",
         iosAppId: process.env.EXPO_PUBLIC_ADS_IOS_FR || ""
       }
+    ],
+    [
+      "expo-build-properties",
+      {
+        ios: {
+          deploymentTarget: "14.0"
+        }
+      }
     ]
   ],
   experiments: {
